@@ -20,9 +20,6 @@ class YoutubeInfoImporter:
     YOUTUBE_CHANNEL_API_URL = ''.join((YOUTUBE_API_URL, 'channels?key=<api_key>&'))
     YOUTUBE_SEARCH_API_URL = ''.join((YOUTUBE_API_URL, 'search?key=<api_key>&'))
 
-    # requestChannelVideosInfo = YOUTUBE_SEARCH_API_URL + 'channelId={
-    # 0}&part=id&order=date&type=video&publishedBefore={' \ '1}&publishedAfter={2}&pageToken={3}&maxResults=50 '
-
     # youtubeVideoUrl = 'https://www.youtube.com/watch?v={0}'
 
     def __init__(self, api_key_filepath):
@@ -45,14 +42,13 @@ class YoutubeInfoImporter:
 
     # ---------------------------------------------- #
 
-    def get_channel_id(self, channel_name):
+    @staticmethod
+    def send_request(url):
         """
-        Retrieves channel ID of a Youtube channel
-        :return:
+            Send a request to an API and parses its response in JSON.
+        :param url: str URL to request
+        :return: JSON response
         """
-        log.info(f'Searching channel id for channel: {channel_name}')
-
-        url = ''.join((self.youtube_channel_api_url, f'forUsername={channel_name}&part=id'))
         log.debug(f"Request: {url}")
 
         log.info('Sending request')
@@ -61,6 +57,25 @@ class YoutubeInfoImporter:
         log.info('Parsing the response')
         response_as_json = response.json()
         log.debug(f'Response: {json.dumps(response_as_json, indent=4)}')
+
+        if response.status_code != 200:
+            log.error(f'Response: {json.dumps(response_as_json, indent=4)}')
+            raise ValueError(f"Error while requesting API, status_code: {response.status_code}.")
+
+        return response_as_json
+
+    # ---------------------------------------------- #
+
+    def get_channel_id(self, channel_name):
+        """
+        Retrieves channel ID of a Youtube channel.
+        :param channel_name: str name of the channel
+        :return: str id of the channel
+        """
+        log.info(f'Searching channel id for channel: {channel_name}')
+
+        url = ''.join((self.youtube_channel_api_url, f'forUsername={channel_name}&part=id'))
+        response_as_json = self.send_request(url)
 
         log.info('Extracting the channel id')
         if response_as_json['pageInfo'].get('totalResults') > 0:
@@ -78,7 +93,49 @@ class YoutubeInfoImporter:
 
         return channel_id
 
+    # ---------------------------------------------- #
+
+    def get_channel_videos_ids(self, channel_id):
+        """
+            Retrieves videos ids of a given channel id.
+        :param channel_id:
+        :return:
+        """
+
+        log.info(f"Fetching videos id of channel {channel_id}...")
+        next_page_token = None
+        list_videos = []
+        nb_iter = 0
+        while True:
+            # Increment number of iterations
+            nb_iter += 1
+
+            # Build url string
+            url = ''.join((self.youtube_search_api_url, f'channelId={channel_id}&part=id&order=date&type=video&maxResults=50'))
+
+            if next_page_token:
+                url = ''.join((url, "&pageToken=", next_page_token))
+
+            # Send request
+            response = self.send_request(url)
+
+            # Fetch videos ids
+            if response["items"]:
+                new_videos = [i["id"]["videoId"] for i in response["items"]]
+                list_videos.extend(new_videos)
+                # Update loop condition
+                next_page_token = response["nextPageToken"]
+            else:
+                log.debug("No more video to fetch.")
+                break
+
+        log.info(f"{len(list_videos)} were found for channel {channel_id} using {nb_iter} iterations.")
+        log.debug(f"Videos id of channel: {channel_id}: {list_videos}")
+        return list_videos
+
 
 if __name__ == '__main__':
     yt = YoutubeInfoImporter("D:\\git\\workout-manager\\api_key.txt")
-    yt.get_channel_id("blogilates")
+    ch_id = yt.get_channel_id("blogilates")
+    v = yt.get_channel_videos_ids(ch_id)
+    print(len(v))
