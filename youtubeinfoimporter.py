@@ -1,6 +1,9 @@
 import requests
 import json
 import logging
+import math
+from rfc3339 import rfc3339
+import datetime
 
 # Logs in console
 logging.basicConfig(level=logging.DEBUG)
@@ -95,10 +98,12 @@ class YoutubeInfoImporter:
 
     # ---------------------------------------------- #
 
-    def get_channel_videos_ids(self, channel_id):
+    def get_channel_videos_ids(self, channel_id, published_after=None):
         """
-            Retrieves videos ids of a given channel id.
-        :param channel_id:
+            Retrieves videos ids of a given channel id. If published_after is not specified, it fetches all the videos
+            of the channel.
+        :param channel_id: str, id of the channel to fetch
+        :param published_after: str, date in the format YYYY-MM-DD to fetch videos after this given date.
         :return:
         """
 
@@ -111,23 +116,40 @@ class YoutubeInfoImporter:
             nb_iter += 1
 
             # Build url string
-            url = ''.join((self.youtube_search_api_url, f'channelId={channel_id}&part=id&order=date&type=video&maxResults=50'))
+            url = ''.join((self.youtube_search_api_url, f'channelId={channel_id}&part=id&order=date&type=video'
+                                                        f'&maxResults=50'))
 
             if next_page_token:
                 url = ''.join((url, "&pageToken=", next_page_token))
 
+            if published_after:
+                log.debug('Converting timestamps to RFC3339 format')
+                try:
+                    published_after_date = datetime.datetime.strptime(published_after, "%Y-%m-%d")
+                    published_after_rfc3339 = rfc3339(published_after_date, utc=True)
+                    url = ''.join((url, "&publishedAfter=", published_after_rfc3339))
+                except ValueError:
+                    raise ValueError("Incorrect data format, should be YYYY-MM-DD")
             # Send request
             response = self.send_request(url)
+
+            # Determine max number of iterations at the first call
+            nb_videos = response["pageInfo"]["totalResults"]
+            max_iter = math.ceil(nb_videos/50)
+            log.debug(f"There are {nb_videos} videos to fetch. Max number of iterations is {max_iter}.")
 
             # Fetch videos ids
             if response["items"]:
                 new_videos = [i["id"]["videoId"] for i in response["items"]]
                 list_videos.extend(new_videos)
-                # Update loop condition
-                next_page_token = response["nextPageToken"]
-            else:
+
+            # Loop break condition: no videos or too many iterations. The later is a failsafe for API calls quota.
+            if not response["items"] or nb_iter >= max_iter or "nextPageToken" not in response:
                 log.debug("No more video to fetch.")
                 break
+
+            # Update loop condition
+            next_page_token = response["nextPageToken"]
 
         log.info(f"{len(list_videos)} were found for channel {channel_id} using {nb_iter} iterations.")
         log.debug(f"Videos id of channel: {channel_id}: {list_videos}")
@@ -136,6 +158,7 @@ class YoutubeInfoImporter:
 
 if __name__ == '__main__':
     yt = YoutubeInfoImporter("D:\\git\\workout-manager\\api_key.txt")
-    ch_id = yt.get_channel_id("blogilates")
-    v = yt.get_channel_videos_ids(ch_id)
+    #ch_id = yt.get_channel_id("blogilates")
+    ch_id = "UCqq5SDyUcFR2hDqr6VmplLA"
+    v = yt.get_channel_videos_ids(ch_id, "2019-01-01")
     print(len(v))
