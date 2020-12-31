@@ -22,6 +22,8 @@ class YoutubeInfoImporter:
     YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/'
     YOUTUBE_CHANNEL_API_URL = ''.join((YOUTUBE_API_URL, 'channels?key=<api_key>&'))
     YOUTUBE_SEARCH_API_URL = ''.join((YOUTUBE_API_URL, 'search?key=<api_key>&'))
+    YOUTUBE_VIDEO_DETAILS_API_URL = ''.join((YOUTUBE_API_URL, 'videos?key=<api_key>&part=snippet&'))
+    YOUTUBE_VIDEO_URL = 'https://www.youtube.com/watch?v=<video_id>'
 
     # youtubeVideoUrl = 'https://www.youtube.com/watch?v={0}'
 
@@ -30,6 +32,8 @@ class YoutubeInfoImporter:
         self.api_key = self.get_api_key()
         self.youtube_channel_api_url = YoutubeInfoImporter.YOUTUBE_CHANNEL_API_URL.replace("<api_key>", self.api_key)
         self.youtube_search_api_url = YoutubeInfoImporter.YOUTUBE_SEARCH_API_URL.replace("<api_key>", self.api_key)
+        self.youtube_video_details_api_url = YoutubeInfoImporter.YOUTUBE_VIDEO_DETAILS_API_URL.replace("<api_key>", self.api_key)
+        self.videos_dict = {}
 
     # ---------------------------------------------- #
 
@@ -155,10 +159,56 @@ class YoutubeInfoImporter:
         log.debug(f"Videos id of channel: {channel_id}: {list_videos}")
         return list_videos
 
+    # ---------------------------------------------- #
+
+    def get_video_info(self, video_id, limit_description=100):
+        """
+        Get video information such as title and description.
+        :param video_id: str, id of the video
+        :param limit_description: int, maximum number of characters saved within video description
+        :return: dict
+        """
+        log.info(f"Fetching information for video {video_id}...")
+
+        # Build url string
+        url = ''.join((self.youtube_video_details_api_url, f'id={video_id}'))
+
+        # Send request
+        response = self.send_request(url)
+
+        if response["items"]:
+            video_info = {
+                "title": response["items"][0]["snippet"]["title"],
+                "publishedAt": response["items"][0]["snippet"]["publishedAt"],
+                "description": response["items"][0]["snippet"]["description"][:limit_description],
+                "url": self.YOUTUBE_VIDEO_URL.replace("<video_id>", video_id),
+                "tags": response["items"][0]["snippet"]["tags"],
+            }
+
+            return video_info
+
+        log.error(f"No information found for video {video_id}")
+        raise ValueError(f"No information found for video {video_id}")
+
+    # ---------------------------------------------- #
+
+    def import_videos_from_channel(self, channel_name, channel_id=None, published_after=None):
+        """
+        Imports videos from a channel.
+        :param channel_name: str, Name of the channel. Used to look for the channel id if not provided.
+        :param channel_id: str, id of the channel. Optional.
+        :param published_after: str, optional date to restrain videos importation. Must respect the format YYYY-MM-DD.
+        """
+        if not channel_id:
+            channel_id = yt.get_channel_id(channel_name)
+        self.videos_dict[channel_id] = {"channel_title": channel_name, "videos": {}}
+        videos = yt.get_channel_videos_ids(channel_id, published_after)
+        for v_id in videos:
+            self.videos_dict[channel_id]["videos"][v_id] = yt.get_video_info(v_id)
+
 
 if __name__ == '__main__':
     yt = YoutubeInfoImporter("D:\\git\\workout-manager\\api_key.txt")
-    #ch_id = yt.get_channel_id("blogilates")
-    ch_id = "UCqq5SDyUcFR2hDqr6VmplLA"
-    v = yt.get_channel_videos_ids(ch_id, "2019-01-01")
-    print(len(v))
+    yt.import_videos_from_channel("blogilates", published_after="2020-12-01")
+    print(yt.videos_dict)
+
