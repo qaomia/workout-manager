@@ -4,6 +4,8 @@ import logging
 import math
 from rfc3339 import rfc3339
 import datetime
+import isodate
+import pprint
 
 # Logs in console
 logging.basicConfig(level=logging.DEBUG)
@@ -22,7 +24,7 @@ class YoutubeInfoImporter:
     YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/'
     YOUTUBE_CHANNEL_API_URL = ''.join((YOUTUBE_API_URL, 'channels?key=<api_key>&'))
     YOUTUBE_SEARCH_API_URL = ''.join((YOUTUBE_API_URL, 'search?key=<api_key>&'))
-    YOUTUBE_VIDEO_DETAILS_API_URL = ''.join((YOUTUBE_API_URL, 'videos?key=<api_key>&part=snippet&'))
+    YOUTUBE_VIDEO_DETAILS_API_URL = ''.join((YOUTUBE_API_URL, 'videos?key=<api_key>&part=snippet,contentDetails&'))
     YOUTUBE_VIDEO_URL = 'https://www.youtube.com/watch?v=<video_id>'
 
     def __init__(self, api_key_filepath):
@@ -44,6 +46,16 @@ class YoutubeInfoImporter:
             # Read & print the entire file
             api_key = reader.read()
         return api_key
+
+    # ---------------------------------------------- #
+
+    def get_videos_dict(self):
+        """
+        Prints nicely videos dict
+        :return:
+        """
+        pp = pprint.PrettyPrinter(depth=4)
+        pp.pprint(self.videos_dict)
 
     # ---------------------------------------------- #
 
@@ -181,6 +193,7 @@ class YoutubeInfoImporter:
                 "description": response["items"][0]["snippet"]["description"][:limit_description],
                 "url": self.YOUTUBE_VIDEO_URL.replace("<video_id>", video_id),
                 "tags": response["items"][0]["snippet"]["tags"],
+                "duration": isodate.parse_duration(response["items"][0]["contentDetails"]["duration"])
             }
 
             return video_info
@@ -204,9 +217,11 @@ class YoutubeInfoImporter:
         for v_id in videos:
             self.videos_dict[channel_id]["videos"][v_id] = yt.get_video_info(v_id)
 
+    # ---------------------------------------------- #
+
 
 if __name__ == '__main__':
     yt = YoutubeInfoImporter("D:\\git\\workout-manager\\api_key.txt")
     yt.import_videos_from_channel("blogilates", published_after="2020-12-01")
-    print(yt.videos_dict)
+    print(yt.get_videos_dict())
 
