@@ -25,8 +25,6 @@ class YoutubeInfoImporter:
     YOUTUBE_VIDEO_DETAILS_API_URL = ''.join((YOUTUBE_API_URL, 'videos?key=<api_key>&part=snippet&'))
     YOUTUBE_VIDEO_URL = 'https://www.youtube.com/watch?v=<video_id>'
 
-    # youtubeVideoUrl = 'https://www.youtube.com/watch?v={0}'
-
     def __init__(self, api_key_filepath):
         self.api_key_filepath = api_key_filepath
         self.api_key = self.get_api_key()
@@ -52,7 +50,7 @@ class YoutubeInfoImporter:
     @staticmethod
     def send_request(url):
         """
-            Send a request to an API and parses its response in JSON.
+        Send a request to an API and parses its response in JSON.
         :param url: str URL to request
         :return: JSON response
         """
@@ -104,8 +102,8 @@ class YoutubeInfoImporter:
 
     def get_channel_videos_ids(self, channel_id, published_after=None):
         """
-            Retrieves videos ids of a given channel id. If published_after is not specified, it fetches all the videos
-            of the channel.
+        Retrieves videos ids of a given channel id. If published_after is not specified, it fetches all the videos
+        of the channel.
         :param channel_id: str, id of the channel to fetch
         :param published_after: str, date in the format YYYY-MM-DD to fetch videos after this given date.
         :return:
